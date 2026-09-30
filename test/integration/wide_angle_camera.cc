@@ -305,6 +305,33 @@ void WideAngleCameraSensorTest::CustomCameraInfoTopic(
 
   EXPECT_TRUE(infoHelper.WaitForMessage()) << infoHelper;
 
+  const auto infoMsg = infoHelper.Message();
+  EXPECT_EQ(800u, infoMsg.width());
+  EXPECT_EQ(600u, infoMsg.height());
+  ASSERT_TRUE(infoMsg.has_distortion());
+  EXPECT_EQ(gz::msgs::CameraInfo::Distortion::EQUIDISTANT,
+      infoMsg.distortion().model());
+  ASSERT_EQ(4, infoMsg.distortion().k_size());
+  for (const auto coefficient : infoMsg.distortion().k())
+  {
+    EXPECT_DOUBLE_EQ(0.0, coefficient);
+  }
+
+  const double expectedFocalLength = 800.0 / 2.2689;
+  ASSERT_TRUE(infoMsg.has_intrinsics());
+  ASSERT_EQ(9, infoMsg.intrinsics().k_size());
+  EXPECT_NEAR(expectedFocalLength, infoMsg.intrinsics().k(0), 1e-6);
+  EXPECT_DOUBLE_EQ(400.0, infoMsg.intrinsics().k(2));
+  EXPECT_NEAR(expectedFocalLength, infoMsg.intrinsics().k(4), 1e-6);
+  EXPECT_DOUBLE_EQ(300.0, infoMsg.intrinsics().k(5));
+
+  ASSERT_TRUE(infoMsg.has_projection());
+  ASSERT_EQ(12, infoMsg.projection().p_size());
+  EXPECT_NEAR(expectedFocalLength, infoMsg.projection().p(0), 1e-6);
+  EXPECT_DOUBLE_EQ(400.0, infoMsg.projection().p(2));
+  EXPECT_NEAR(expectedFocalLength, infoMsg.projection().p(5), 1e-6);
+  EXPECT_DOUBLE_EQ(300.0, infoMsg.projection().p(6));
+
   // Clean up
   mgr.Remove(sensor->Id());
   engine->DestroyScene(scene);
