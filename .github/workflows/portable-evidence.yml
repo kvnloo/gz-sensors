@@ -1,0 +1,43 @@
+name: Portable Evidence
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - exp/portable-evidence-v0
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test normalizer
+        run: python test/tools/test_portable_evidence.py
+      - name: Generate replay receipt
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          cat > /tmp/results.xml <<'XML'
+          <testsuite>
+            <testcase classname="dvl" name="BottomTrackingWhileStatic" time="0.1"/>
+            <testcase classname="dvl" name="BottomTrackingWhileInMotion" time="0.2"/>
+          </testsuite>
+          XML
+          python test/tools/portable_evidence.py             --junit /tmp/results.xml             --revision "$REVISION"             --subject dvl-kinematics-conformance > portable-evidence.json
+          python - <<'PY'
+          import json, os
+          with open("portable-evidence.json", encoding="utf-8") as stream:
+              receipt = json.load(stream)
+          assert receipt["producer"]["revision"] == os.environ["REVISION"]
+          assert receipt["outcome"] == "pass"
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable-evidence-gz-sensors-${{ github.sha }}
+          path: portable-evidence.json
