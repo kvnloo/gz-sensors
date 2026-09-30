@@ -753,6 +753,76 @@ void CameraSensor::PopulateInfo(const sdf::Camera *_cameraSdf)
 }
 
 //////////////////////////////////////////////////
+void CameraSensor::PopulateWideAngleInfo(const sdf::Camera *_cameraSdf)
+{
+  if (_cameraSdf->LensType() != "equidistant" ||
+      !_cameraSdf->LensScaleToHfov())
+  {
+    this->PopulateInfo(_cameraSdf);
+    return;
+  }
+
+  const unsigned int width = _cameraSdf->ImageWidth();
+  const unsigned int height = _cameraSdf->ImageHeight();
+  const double hfov = _cameraSdf->HorizontalFov().Radian();
+  const double focalLength = static_cast<double>(width) / hfov;
+  const double cx = static_cast<double>(width) * 0.5;
+  const double cy = static_cast<double>(height) * 0.5;
+
+  msgs::CameraInfo::Distortion *distortion =
+    this->dataPtr->infoMsg.mutable_distortion();
+  distortion->set_model(msgs::CameraInfo::Distortion::EQUIDISTANT);
+  distortion->add_k(0.0);
+  distortion->add_k(0.0);
+  distortion->add_k(0.0);
+  distortion->add_k(0.0);
+
+  msgs::CameraInfo::Intrinsics *intrinsics =
+    this->dataPtr->infoMsg.mutable_intrinsics();
+  intrinsics->add_k(focalLength);
+  intrinsics->add_k(0.0);
+  intrinsics->add_k(cx);
+  intrinsics->add_k(0.0);
+  intrinsics->add_k(focalLength);
+  intrinsics->add_k(cy);
+  intrinsics->add_k(0.0);
+  intrinsics->add_k(0.0);
+  intrinsics->add_k(1.0);
+
+  msgs::CameraInfo::Projection *proj =
+    this->dataPtr->infoMsg.mutable_projection();
+  proj->add_p(focalLength);
+  proj->add_p(0.0);
+  proj->add_p(cx);
+  proj->add_p(0.0);
+  proj->add_p(0.0);
+  proj->add_p(focalLength);
+  proj->add_p(cy);
+  proj->add_p(0.0);
+  proj->add_p(0.0);
+  proj->add_p(0.0);
+  proj->add_p(1.0);
+  proj->add_p(0.0);
+
+  this->dataPtr->infoMsg.add_rectification_matrix(1.0);
+  this->dataPtr->infoMsg.add_rectification_matrix(0.0);
+  this->dataPtr->infoMsg.add_rectification_matrix(0.0);
+  this->dataPtr->infoMsg.add_rectification_matrix(0.0);
+  this->dataPtr->infoMsg.add_rectification_matrix(1.0);
+  this->dataPtr->infoMsg.add_rectification_matrix(0.0);
+  this->dataPtr->infoMsg.add_rectification_matrix(0.0);
+  this->dataPtr->infoMsg.add_rectification_matrix(0.0);
+  this->dataPtr->infoMsg.add_rectification_matrix(1.0);
+
+  auto infoFrame = this->dataPtr->infoMsg.mutable_header()->add_data();
+  infoFrame->set_key("frame_id");
+  infoFrame->add_value(this->FrameId());
+
+  this->dataPtr->infoMsg.set_width(width);
+  this->dataPtr->infoMsg.set_height(height);
+}
+
+//////////////////////////////////////////////////
 void CameraSensor::SetBaseline(double _baseline)
 {
   this->dataPtr->baseline = _baseline;

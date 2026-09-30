@@ -178,6 +178,11 @@ namespace gz
       /// information.
       protected: void PopulateInfo(const sdf::Camera *_cameraSdf);
 
+      /// \brief Populate camera info message for a wide-angle camera.
+      /// \param[in] _cameraSdf Pointer to SDF object containing camera
+      /// information.
+      protected: void PopulateWideAngleInfo(const sdf::Camera *_cameraSdf);
+
       /// \brief Publish camera info message.
       /// \param[in] _now The current time
       protected: void PublishInfo(

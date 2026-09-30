@@ -227,7 +227,7 @@ bool WideAngleCameraSensor::CreateCamera()
     return false;
   }
 
-  this->PopulateInfo(cameraSdf);
+  this->PopulateWideAngleInfo(cameraSdf);
 
   unsigned int width = cameraSdf->ImageWidth();
   unsigned int height = cameraSdf->ImageHeight();
