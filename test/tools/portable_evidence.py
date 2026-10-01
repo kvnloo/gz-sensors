@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 
 _SCHEMA = "z0.evidence.v0"
-_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
+_SHA = re.compile(r"[0-9a-fA-F]{40}")
 
 
 def _test_result(case):
@@ -19,11 +19,44 @@ def _test_result(case):
         return "fail"
     if case.find("skipped") is not None:
         return "unknown"
+    # GoogleTest emits disabled tests without a <skipped> child. Unknown
+    # execution states must not silently become successful test evidence.
+    if case.get("status") not in (None, "run"):
+        return "unknown"
+    if case.get("result") not in (None, "completed"):
+        return "unknown"
     return "pass"
 
 
+def _summary_complete(root):
+    """Check optional aggregate counts without inventing missing test cases."""
+    for suite in root.iter():
+        if suite.tag not in ("testsuite", "testsuites"):
+            continue
+        cases = list(suite.iter("testcase"))
+        observed = {
+            "tests": len(cases),
+            "failures": sum(case.find("failure") is not None for case in cases),
+            "errors": sum(case.find("error") is not None for case in cases),
+            "skipped": sum(
+                case.find("skipped") is not None or case.get("result") == "skipped"
+                for case in cases
+            ),
+        }
+        for name, count in observed.items():
+            declared = suite.get(name)
+            if declared is not None and (
+                not re.fullmatch(r"[0-9]+", declared)
+                or (declared.lstrip("0") or "0") != str(count)
+            ):
+                return False
+        # Do not compare "disabled": GoogleTest retains that count when
+        # --gtest_also_run_disabled_tests explicitly executes those cases.
+    return True
+
+
 def normalize_junit(root, *, revision, subject_id):
-    if not _SHA.match(revision):
+    if not isinstance(revision, str) or not _SHA.fullmatch(revision):
         raise ValueError("revision must be a full 40-character Git SHA")
 
     evidence = []
@@ -42,14 +75,15 @@ def normalize_junit(root, *, revision, subject_id):
         })
 
     results = [item["result"] for item in evidence]
+    complete = bool(evidence) and "unknown" not in results and _summary_complete(root)
     if "fail" in results:
         outcome = "fail"
-    elif not results or "unknown" in results:
+    elif not complete:
         outcome = "unknown"
     else:
         outcome = "pass"
 
-    completeness = "pass" if evidence and "unknown" not in results else "unknown"
+    completeness = "pass" if complete else "unknown"
     return {
         "schema": _SCHEMA,
         "producer": {
