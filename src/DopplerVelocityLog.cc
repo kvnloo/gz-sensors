@@ -1785,7 +1785,7 @@ namespace gz
               relativeSensorVelocityInSensorFrame.Dot(beamAxisInSensorFrame);
           if (this->waterMassModeNoise)
           {
-            this->waterMassModeNoise->Apply(beamSpeed);
+            beamSpeed = this->waterMassModeNoise->Apply(beamSpeed);
           }
 
           const double prevAverageBeamSpeed = averageBeamSpeed;

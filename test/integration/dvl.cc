@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cmath>
 #include <string>
 
 #include <gz/math/Quaternion.hh>
@@ -63,6 +64,7 @@ struct DVLConfig
   // These tests verify kinematics, not the statistical noise model. Keep the
   // samples deterministic so Gaussian tails cannot make CI flaky.
   double trackingNoise = 0.0;
+  double trackingNoiseMean = 0.0;
   double velocityTolerance = 1e-6;
 
   std::string waterVelocityVariable = "underwater_current_velocity";
@@ -113,6 +115,7 @@ sdf::ElementPtr MakeDVLSdf(const DVLConfig &_config)
     << "      <bottom_mode>"
     << "       <when>" << _config.bottomTrackingMode << "</when>"
     << "       <noise type='gaussian'>"
+    << "        <mean>" << _config.trackingNoiseMean << "</mean>"
     << "        <stddev>" << _config.trackingNoise << "</stddev>"
     << "       </noise>"
     << "       <visualize>1</visualize>"
@@ -120,6 +123,7 @@ sdf::ElementPtr MakeDVLSdf(const DVLConfig &_config)
     << "      <water_mass_mode>"
     << "       <when>" << _config.waterMassTrackingMode << "</when>"
     << "       <noise type='gaussian'>"
+    << "        <mean>" << _config.trackingNoiseMean << "</mean>"
     << "        <stddev>" << _config.trackingNoise << "</stddev>"
     << "       </noise>"
     << "       <water_velocity>"
@@ -154,6 +158,9 @@ sdf::ElementPtr MakeDVLSdf(const DVLConfig &_config)
 class DopplerVelocityLogTest : public testing::Test,
   public testing::WithParamInterface<const char *>
 {
+  /// \brief Check water-mass tracking with a deterministic noise offset.
+  protected: void CheckWaterMassTrackingWhileStatic(double _noiseMean);
+
   // Documentation inherited
   protected: void SetUp() override
   {
@@ -365,13 +372,17 @@ TEST_P(DopplerVelocityLogTest, BottomTrackingWhileStatic)
 }
 
 /////////////////////////////////////////////////
-TEST_P(DopplerVelocityLogTest, WaterMassTrackingWhileStatic)
+void DopplerVelocityLogTest::CheckWaterMassTrackingWhileStatic(
+    double _noiseMean)
 {
   // Add DVL sensor
   DVLConfig config;
   config.waterMassTrackingMode = "always";
+  config.trackingNoise = 0.0;
+  config.trackingNoiseMean = _noiseMean;
   auto *sensor = this->manager.
       CreateSensor<DopplerVelocityLog>(MakeDVLSdf(config));
+  ASSERT_NE(nullptr, sensor);
 
   constexpr uint64_t deviceEntity = 200u;
   sensor->SetEntity(deviceEntity);
@@ -425,7 +436,11 @@ TEST_P(DopplerVelocityLogTest, WaterMassTrackingWhileStatic)
   constexpr auto velocityReference = DVLKinematicEstimate::DVL_REFERENCE_SHIP;
   EXPECT_EQ(velocityReference, message.velocity().reference());
   const math::Vector3d waterVelocity(1.0, 0.5, 0.0);
-  EXPECT_TRUE((-waterVelocity).Equal(
+  // All four beam axes share z = -cos(tilt). An equal additive beam-speed
+  // offset therefore shifts only the reconstructed vertical component.
+  const auto expectedVelocity = -waterVelocity - math::Vector3d::UnitZ *
+      (_noiseMean / std::cos(GZ_DTOR(config.tiltAngle)));
+  EXPECT_TRUE(expectedVelocity.Equal(
     msgs::Convert(message.velocity().mean()),
     config.velocityTolerance));
   EXPECT_EQ(4, message.beams_size());
@@ -444,7 +459,8 @@ TEST_P(DopplerVelocityLogTest, WaterMassTrackingWhileStatic)
     EXPECT_LE(message.target().range().mean(),
               message.beams(i).range().mean());
 
-    const auto beamVelocity = beamAxis * beamAxis.Dot(-waterVelocity);
+    const auto beamVelocity =
+        beamAxis * (beamAxis.Dot(-waterVelocity) + _noiseMean);
     EXPECT_TRUE(beamVelocity.Equal(
       msgs::Convert(message.beams(i).velocity().mean()),
       config.velocityTolerance));
@@ -460,6 +476,20 @@ TEST_P(DopplerVelocityLogTest, WaterMassTrackingWhileStatic)
   EXPECT_EQ("dvl_frame", message.header().data(0).value(0));
 
   this->manager.Remove(sensor->Id());
+}
+
+/////////////////////////////////////////////////
+TEST_P(DopplerVelocityLogTest, WaterMassTrackingWhileStatic)
+{
+  this->CheckWaterMassTrackingWhileStatic(0.0);
+}
+
+/////////////////////////////////////////////////
+TEST_P(DopplerVelocityLogTest, WaterMassTrackingNoiseMean)
+{
+  // Zero standard deviation makes this independent of random seeds and
+  // Gaussian tails, while a nonzero mean exposes a discarded Apply result.
+  this->CheckWaterMassTrackingWhileStatic(0.25);
 }
 
 /////////////////////////////////////////////////
