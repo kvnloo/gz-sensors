@@ -794,11 +794,11 @@ void CameraSensor::PopulateWideAngleInfo(const sdf::Camera *_cameraSdf)
   proj->add_p(focalLength);
   proj->add_p(0.0);
   proj->add_p(cx);
-  proj->add_p(0.0);
+  proj->add_p(_cameraSdf->LensProjectionTx());
   proj->add_p(0.0);
   proj->add_p(focalLength);
   proj->add_p(cy);
-  proj->add_p(0.0);
+  proj->add_p(_cameraSdf->LensProjectionTy());
   proj->add_p(0.0);
   proj->add_p(0.0);
   proj->add_p(1.0);

@@ -331,6 +331,9 @@ void WideAngleCameraSensorTest::CustomCameraInfoTopic(
   EXPECT_DOUBLE_EQ(400.0, infoMsg.projection().p(2));
   EXPECT_NEAR(expectedFocalLength, infoMsg.projection().p(5), 1e-6);
   EXPECT_DOUBLE_EQ(300.0, infoMsg.projection().p(6));
+  // Explicit lens projection translations must survive equidistant metadata.
+  EXPECT_DOUBLE_EQ(-35.0, infoMsg.projection().p(3));
+  EXPECT_DOUBLE_EQ(7.0, infoMsg.projection().p(7));
 
   // Clean up
   mgr.Remove(sensor->Id());

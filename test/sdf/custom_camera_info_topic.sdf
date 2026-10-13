@@ -86,6 +86,10 @@
           <lens>
             <type>equidistant</type>
             <scale_to_hfov>true</scale_to_hfov>
+            <projection>
+              <tx>-35.0</tx>
+              <ty>7.0</ty>
+            </projection>
           </lens>
         </camera>
       </sensor>
