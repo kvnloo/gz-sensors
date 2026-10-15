@@ -16,6 +16,7 @@
 */
 
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <map>
 #include <unordered_map>
@@ -318,28 +319,21 @@ bool CpuLidarSensor::Update(
         gz::math::Vector3d p = this->dataPtr->unitVectors[index] * range;
 
         int fieldIndex = 0;
+        // Packed 18-byte points do not keep float fields 4-byte aligned.
+        const auto writePointField = [&](auto value)
+        {
+          std::memcpy(msgBufferIndex +
+              this->dataPtr->pointMsg.field(fieldIndex++).offset(),
+              &value, sizeof(value));
+        };
 
-        *reinterpret_cast<float *>(msgBufferIndex +
-            this->dataPtr->pointMsg.field(fieldIndex++).offset()) =
-          static_cast<float>(p.X());
-
-        *reinterpret_cast<float *>(msgBufferIndex +
-            this->dataPtr->pointMsg.field(fieldIndex++).offset()) =
-          static_cast<float>(p.Y());
-
-        *reinterpret_cast<float *>(msgBufferIndex +
-            this->dataPtr->pointMsg.field(fieldIndex++).offset()) =
-          static_cast<float>(p.Z());
-
-        *reinterpret_cast<float *>(msgBufferIndex +
-            this->dataPtr->pointMsg.field(fieldIndex++).offset()) =
-          static_cast<float>(
+        writePointField(static_cast<float>(p.X()));
+        writePointField(static_cast<float>(p.Y()));
+        writePointField(static_cast<float>(p.Z()));
+        writePointField(static_cast<float>(
             index < static_cast<int>(this->dataPtr->intensities.size()) ?
-            this->dataPtr->intensities[index] : 0.0);
-
-        *reinterpret_cast<uint16_t *>(msgBufferIndex +
-            this->dataPtr->pointMsg.field(fieldIndex++).offset()) =
-          static_cast<uint16_t>(j);
+            this->dataPtr->intensities[index] : 0.0));
+        writePointField(static_cast<uint16_t>(j));
 
         msgBufferIndex += this->dataPtr->pointMsg.point_step();
       }
